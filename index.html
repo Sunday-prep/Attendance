@@ -104,6 +104,35 @@ function vLogin(){return `<div class="card" style="max-width:380px;margin:24px a
 async function doLogin(){const u=lu.value.trim(),p=lp.value;if(!u||!p){le.textContent='اكتب اسم المستخدم وكلمة السر';return}le.textContent='';
  try{await auth.signInWithEmailAndPassword(em(u),p)}catch(e){const c=e.code||'';le.textContent=c.includes('too-many')?'محاولات كتير، جرّب بعد شوية':c.includes('network')?'تأكد من الاتصال بالإنترنت':'اسم المستخدم أو كلمة السر غلط'}}
 function logout(){prof=null;try{localStorage.removeItem(KEY)}catch(e){}auth.signOut()}
+/* التقارير */
+let rpA={f:'',t:'',fam:''},rpV={f:'',t:'',fam:''},rmsg={a:'',v:''};
+const fillC=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
+const hdr=(ws,c)=>ws.getRow(1).eachCell(x=>{x.font={bold:true,color:{argb:'FFFFFFFF'}};x.fill=fillC(c);x.alignment={horizontal:'center'}});
+const rng=k=>{const r=k==='a'?rpA:rpV,src=k==='a'?dates():S.visits.map(v=>v.date).sort();return[r.f||src[0]||'',r.t||new Date().toISOString().slice(0,10)]};
+const repKids=k=>{const r=k==='a'?rpA:rpV;return S.kids.filter(x=>!r.fam||x.family===r.fam)};
+async function xl(wb,name,k){const dl=await getDL();if(!dl){rmsg[k]='التنزيل غير متاح هنا';return render()}try{await dl.save({filename:name,data:await wb.xlsx.writeBuffer()});rmsg[k]='تم تجهيز التقرير ✓'}catch(e){rmsg[k]='تعذر التنزيل'}render()}
+function repBox(k){const n=k==='a'?'rpA':'rpV',r=k==='a'?rpA:rpV,[f,t]=rng(k);
+ return `<div class="card"><h2>${k==='a'?'تقرير الحضور (Excel)':'تقرير الافتقاد (Excel)'}</h2><div class="row"><label>الفترة من <input type="date" value="${f}" onchange="${n}.f=this.value"></label><label>إلى <input type="date" value="${t}" onchange="${n}.t=this.value"></label><select onchange="${n}.fam=this.value"><option value="">كل الأسر (تقرير عام)</option>${S.families.map(x=>`<option ${x===r.fam?'selected':''}>${esc(x)}</option>`).join('')}</select><button class="b g" onclick="${k==='a'?'repAtt()':'repVis()'}">⬇ تنزيل التقرير</button></div><div class="mut" style="margin-top:6px">${esc(rmsg[k])}</div>${k==='a'?'<div class="mut">Y أخضر للحاضر، N أحمر للغايب. بتظهر أيام الحضور المسجلة في الفترة بس.</div>':''}</div>`}
+async function repAtt(){const [f,t]=rng('a'),ds=dates().filter(d=>d>=f&&d<=t),ks=repKids('a');
+ if(!ds.length){rmsg.a='لا توجد أيام حضور مسجلة في الفترة دي';return render()}
+ if(!ks.length){rmsg.a='لا يوجد أولاد في الأسرة دي';return render()}
+ const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('تقرير الحضور',{views:[{rightToLeft:true,state:'frozen',xSplit:3,ySplit:1}]});
+ ws.columns=[{header:'مسلسل',width:9},{header:'اسم المخدوم',width:28},{header:'الأسرة',width:20},...ds.map(d=>({header:d,width:12})),{header:'عدد الحضور',width:12},{header:'النسبة',width:10}];
+ hdr(ws,'FF3A9BE8');
+ ks.forEach(k=>{const ys=ds.map(d=>S.att[d][k.id]?'Y':'N'),p=ys.filter(x=>x==='Y').length,r=ws.addRow([S.kids.indexOf(k)+1,k.name,k.family,...ys,p+'/'+ds.length,Math.round(p/ds.length*100)+'%']);
+  r.getCell(1).alignment={horizontal:'center'};ys.forEach((y,j)=>{const c=r.getCell(4+j);c.fill=fillC(y==='Y'?'FF27AE60':'FFE63946');c.font={bold:true,color:{argb:'FFFFFFFF'}};c.alignment={horizontal:'center'}})});
+ await xl(wb,`تقرير-الحضور-${ds[0]}_${ds[ds.length-1]}.xlsx`,'a')}
+async function repVis(){const [f,t]=rng('v'),ks=repKids('v');
+ if(!ks.length){rmsg.v='لا يوجد أولاد في الأسرة دي';return render()}
+ const ids=new Set(ks.map(k=>k.id)),vs=S.visits.filter(v=>ids.has(v.kid)&&v.date>=f&&v.date<=t).sort((a,b)=>a.date.localeCompare(b.date));
+ const wb=new ExcelJS.Workbook(),w1=wb.addWorksheet('ملخص الافتقاد',{views:[{rightToLeft:true}]}),w2=wb.addWorksheet('تفاصيل الافتقاد',{views:[{rightToLeft:true}]});
+ w1.columns=[{header:'مسلسل',width:9},{header:'اسم المخدوم',width:28},{header:'الأسرة',width:20},{header:'عدد مرات الافتقاد',width:18},...TYPES.map(x=>({header:x,width:13})),{header:'آخر افتقاد',width:14}];
+ w2.columns=[{header:'مسلسل',width:9},{header:'اسم المخدوم',width:28},{header:'الأسرة',width:20},{header:'تاريخ الافتقاد',width:15},{header:'النوع',width:14},{header:'ملاحظات',width:40}];
+ hdr(w1,'FFFF8A3D');hdr(w2,'FFFF8A3D');
+ ks.forEach(k=>{const sn=S.kids.indexOf(k)+1,kv=vs.filter(v=>v.kid===k.id);w1.addRow([sn,k.name,k.family,kv.length,...TYPES.map(x=>kv.filter(v=>v.type===x).length),kv.length?kv[kv.length-1].date:'—']);kv.forEach(v=>w2.addRow([sn,k.name,k.family,v.date,v.type,v.note]))});
+ const ttl=`الفترة: من ${f||'البداية'} إلى ${t}`+(rpV.fam?` — الأسرة: ${rpV.fam}`:' — كل الأسر');
+ [[w1,9],[w2,6]].forEach(([w,n])=>{w.spliceRows(1,0,[ttl]);w.mergeCells(1,1,1,n);const c=w.getCell(1,1);c.font={bold:true,size:13};c.alignment={horizontal:'center'};c.fill=fillC('FFFFF1C9')});
+ await xl(wb,`تقرير-الافتقاد-${f||'البداية'}_${t}.xlsx`,'v')}
 /* الأسر */
 function vFam(){return `<div class="card"><h2>الأسر</h2><div class="row"><input id="nf" placeholder="اسم الأسرة الجديدة" onkeydown="if(event.key==='Enter')addF()"><button class="b" onclick="addF()">إضافة</button></div>`+
  S.families.map((f,i)=>`<div class="fam">${editF===i?`<input id="ef" value="${esc(f)}" style="flex:1"><button class="b g" onclick="saveF(${i})">حفظ</button><button class="b l" onclick="editF=-1;render()">إلغاء</button>`:
