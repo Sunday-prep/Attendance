@@ -1,0 +1,25 @@
+{
+ "name": "خدمة الأحد – كنيسة مارمينا بشبرا",
+ "short_name": "خدمة الأحد",
+ "start_url": "./",
+ "scope": "./",
+ "display": "standalone",
+ "dir": "rtl",
+ "lang": "ar",
+ "background_color": "#fff7ec",
+ "theme_color": "#e0457b",
+ "icons": [
+  {
+   "src": "icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png",
+   "purpose": "any maskable"
+  },
+  {
+   "src": "icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any maskable"
+  }
+ ]
+}
